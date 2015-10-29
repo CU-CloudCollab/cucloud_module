@@ -1,0 +1,274 @@
+# cucloud module
+
+#### Table of Contents
+1. [About](#about)
+2. [Features](#features)
+3. [Installation](#installation)
+4. [Configuration](#configuration)
+5. [Usage](#usage)
+
+
+## About
+
+Python (2.7) package to provide a cloud agnostic interface to cloud hosting providers, initially focused on Amazon Web Services. It supports storing configuration values that can be managed either via the command line tool ``cucloud`` or in your own custom developed python with ``import cucloud``.
+
+The ``cucloud`` module is intended to provide functionality requiring more customization than could otherwise be simply accomplished with a cloud specific command line interface, e.g. [AWS CLI](https://aws.amazon.com/cli/) or via straightforward chaining of aws cli functionality using [awsclpy](https://pypi.python.org/pypi/awsclpy). 
+
+First step in independent development of the [Cloud-Library-Spec](https://github.com/CU-CloudCollab/Cloud-Library-Spec)
+
+## Features
+
+* Configuration management for multiple profiles and environments within each profile.
+	* For the AWS provider, configuration is stored in DynamoDB and can be imported/exported as JSON.
+* Compute:
+	* Start, stop, reboot instances via instance id(s) or tag(s)
+* Storage:
+	* Create storage snapshots - by volume_id(s) or all volumes attached to 1 or more instances.
+		* Name - keeps same as source volume
+		* Description - concat(name,-,MM-DD-YYYY)
+		* snapshot.start_time should be used to determine future purging
+
+#### Planned
+
+Implemented features should add value -- leverage integrated configuration and/or be more advanced than straightforward SDK.
+
+* Storage:
+	* Find volume snapshots - param based - like create volume - not a single purge
+	* Delete volume snapshot
+	* Restore volume snapshot
+* Compute: 
+	* Create Instance
+	* Terminate instances
+	* Associate Static IP - Possibly using new ``cucloud_TBD`` config table
+* Misc/TBD:
+	* findAMI (AMI -> AWS Specific)
+	* deregister_image
+	* rename_instance
+
+
+## Installation
+
+Requires ``boto3``. ``cucloud`` is not currently available via PyPI.
+
+0. Download the package
+	```
+	wget https://github.com/CU-CloudCollab/cucloud_module/archive/cucloud-<VERSION>.zip
+	```
+
+0. Extract
+	```
+	unzip cucloud-<VERSION>.zip
+	```
+
+0. Install module
+
+	```
+	# global install
+	cd cucloud-<VERSION>
+	python setup.py install
+
+	# alternatively, in user space
+	python setup.py install --user
+	```
+
+0. Alternatively, if simply managing configuration
+	```
+	# alternatively... if you simply need to use the CLI
+	python -m cucloud-<VERSION>/cucloud --provider aws --profile=sandbox \
+	       --env=dev --config-set snapshot_max_days 21
+	```
+
+
+## Configuration
+
+``cucloud`` automatically creates a configuration based DynamoDB table ``cucloud_profiles`` with defaults in which to store additional configuration.
+
+
+### Environmental Variables
+
+```
+# providers must be chosen from supported cucloud module, currently only aws
+CUCLOUD_PROVIDER=aws
+
+# Support for "named profiles"
+# profiles are user created, if you are using multiple profiles with 
+# ~/.aws/credentials, your profile name should match
+CUCLOUD_PROFILE=sandbox
+
+# to allow different configuration values within a profile
+CUCLOUD_ENV=dev
+```
+
+In addition to CUCLOUD_* specific vars, use of AWS named profiles is supported with ``~/.aws/config`` and ``~/.aws/credentials``.  For more information, see the [Configuring the AWS Command Line Interface](http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html).
+
+*Examples:*
+
+*~/.aws/config*
+
+```
+[default]
+output = json
+region = us-east-1
+
+[profile prod]
+output = json
+region = us-east-1
+
+[profile sandbox]
+output = json
+region = us-east-1
+```
+
+*~/.aws/credentials*
+
+```
+[default]
+aws_access_key_id = accesskey2
+aws_secret_access_key = secretkey2
+
+[prod]
+aws_access_key_id = accesskey1
+aws_secret_access_key = secretkey2
+
+[sandbox]
+aws_access_key_id = accesskey2
+aws_secret_access_key = secretkey2
+```
+
+### Managing Profiles and Environments
+
+You are recommend to set ``CUCLOUD_PROVIDER``, ``CUCLOUD_PROFILE``, ``CUCLOUD_ENV`` env vars, but you can override via command line.
+
+```
+$ export CUCLOUD_PROVIDER=aws
+$ export CUCLOUD_PROFILE=sandbox
+$ export CUCLOUD_ENV=sandbox
+
+$ cucloud --provider aws --profile=prod --env=stage --config-list
+```
+
+For each ``CUCLOUD_PROFILE`` (which likely maps to an AWS named profile), you can managing configuration values for multiple environments. For example, if you have a sandbox account mapped to a "sandbox" profile, you may have a dev and a test environment within the same account/profile.
+
+```
+# display list of existing values.
+$ cucloud --env sandbox --config-list
+$ cucloud --config-set <KEY> <VALUE>
+$ cucloud --config-unset <KEY>
+$ cucloud --profile sandbox --env test --config-export > config.json
+$ cucloud --profile sandbox --env dev --config-import < config.json
+```
+
+
+### Managing Configuration
+
+#### Command Line
+
+The package ``cu_cloudcollab_util`` provides a single CLI entry point: `` cucloud`` for managing configuration.
+
+```
+usage: cucloud [-h] [--provider {aws,azure}] [--profile PROFILE] [--env ENV]
+               [--config-list] [--config-set key value] [--config-unset key]
+               [--config-import] [--config-export]
+               [infile] [outfile]
+
+positional arguments:
+  infile
+  outfile
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --provider {aws,azure}
+                        Choose cloud provider
+  --profile PROFILE     Choose provider profile
+  --env ENV             Choose profile environment
+  --config-list         List configuration values
+  --config-set key value
+                        Set a configuration key + value
+  --config-unset key    Unset a configuration key
+  --config-import       Import JSON configuration
+  --config-export       Export JSON configuration
+```
+
+#### Examples
+
+Show our configuration values.
+```
+$ echo $CUCLOUD_PROVIDER $CUCLOUD_PROFILE $CUCLOUD_ENV
+aws ssit-sb dev
+
+$ cucloud --config-list
+Configuration for AWS profile: "ssit-sb", environment: "dev"
+
+Key					Value
+instance_type		t2.micro
+min_count			1
+max_count			1
+```
+
+Set a specific configuration value
+```
+$ cucloud --config-set snapshot_max_days 21
+$ cucloud --config-list
+Configuration for AWS profile: "ssit-sb", environment: "dev"
+
+Key					Value
+instance_type		t2.micro
+min_count			1
+snapshot_max_days	21
+max_count			1
+```
+
+
+Show values in a different profile
+```
+$ cucloud --config-list --profile ssit
+Configuration for AWS profile: "ssit", environment: "dev"
+
+Key					Value
+instance_type		t2.micro
+min_count			1
+max_count			1
+```
+
+
+Unset a value
+```
+$ cucloud --config-unset snapshot_max_days
+$ cucloud --config-list
+Configuration for AWS profile: "ssit", environment: "dev"
+
+Key					Value
+instance_type		t2.micro
+min_count			1
+max_count			1
+```
+
+
+## Usage
+
+Creating your own scripts leveraging the ``cucloud`` module.
+
+```
+#!/usr/bin/env python
+import cucloud.providers
+
+provider = providers.get_provider('aws')
+
+# get our Compute class which will provide methods we want to use
+compute = provider.compute()
+
+# if we have specific instances we want to spin up...
+instance_ids = ['i-cc2f296f']
+# start, stop, reboot instances
+compute.start_instances(instance_ids)
+compute.stop_instances(instance_ids)
+compute.reboot_instances(instance_ids)
+
+# start/stop/reboot instances via tag
+tag_values = ['web-001', 'web-002']
+compute.start_instances_tagged('Name', tag_values)
+compute.stop_instances_tagged('Name', tag_values)
+compute.reboot_instances_tagged('Name', tag_values)
+
+```
+
