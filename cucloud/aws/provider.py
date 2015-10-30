@@ -1,6 +1,7 @@
 import boto3
 import json
 import logging
+import os
 from cucloud.aws import compute
 from cucloud.aws import dns
 from cucloud.aws import dynamodb
@@ -12,7 +13,7 @@ __author__ = 'emg33'
 
 class AwsProvider(ProviderBase):
 
-    def __init__(self, profile_name, env_name):
+    def __init__(self, profile_name, env_name, named_profile=False):
         self._profile_name = None
         self._env_name = None
         self._config = None
@@ -21,9 +22,16 @@ class AwsProvider(ProviderBase):
         self.profile_name = profile_name
         self.env_name = env_name
 
-        # select our connection profile, https://github.com/boto/boto3/pull/69
-        # which AWS account are we going to use
-        boto3.setup_default_session(profile_name=profile_name)
+        self.use_named_profiles = str(named_profile)
+
+        if os.environ.has_key('CUCLOUD_AWS_USE_NAMED_PROFILE'):
+            self.use_named_profiles = os.environ.get('CUCLOUD_AWS_USE_NAMED_PROFILE')
+
+        # support for lazy setting of the env variable
+        if self.use_named_profiles.lower() in ("yes", "true", "y", "t", "1"):
+            # select our connection profile, https://github.com/boto/boto3/pull/69
+            # which AWS account are we going to use
+            boto3.setup_default_session(profile_name=profile_name)
 
         # Get the service resource.
         # http://boto3.readthedocs.org/en/latest/guide/dynamodb.html

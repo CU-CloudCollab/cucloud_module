@@ -52,19 +52,19 @@ Requires ``boto3``. ``cucloud`` is not currently available via PyPI.
 
 0. Download the package
 	```
-	wget https://github.com/CU-CloudCollab/cucloud_module/archive/cucloud-<VERSION>.zip
+	wget https://github.com/CU-CloudCollab/cucloud_module/archive/cucloud_module-<VERSION>.zip
 	```
 
 0. Extract
 	```
-	unzip cucloud-<VERSION>.zip
+	unzip cucloud_module-<VERSION>.zip
 	```
 
 0. Install module
 
 	```
 	# global install
-	cd cucloud-<VERSION>
+	cd cucloud_module-<VERSION>
 	python setup.py install
 
 	# alternatively, in user space
@@ -88,15 +88,23 @@ Requires ``boto3``. ``cucloud`` is not currently available via PyPI.
 
 ```
 # providers must be chosen from supported cucloud module, currently only aws
+# is supported
 CUCLOUD_PROVIDER=aws
 
-# Support for "named profiles"
 # profiles are user created, if you are using multiple profiles with 
-# ~/.aws/credentials, your profile name should match
+# ~/.aws/credentials, your profile name must match
+# If you use IAM role or AWS_ACCESS_KEY_ID= you still need to set a value
+# but it will not effect your connection
 CUCLOUD_PROFILE=sandbox
 
 # to allow different configuration values within a profile
 CUCLOUD_ENV=dev
+
+# (OPTIONAL) when using AWS, if you are using named connectino profiles, 
+# set this to true
+# your CUCLOUD_PROFILE value should then match your named profile name
+# keep this to false or not set if you are using IAM role or AWS_ACCESS_KEY_ID=
+CUCLOUD_AWS_USE_NAMED_PROFILE=true
 ```
 
 In addition to CUCLOUD_* specific vars, use of AWS named profiles is supported with ``~/.aws/config`` and ``~/.aws/credentials``.  For more information, see the [Configuring the AWS Command Line Interface](http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html).

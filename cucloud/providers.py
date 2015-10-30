@@ -20,7 +20,7 @@ def azure(profile_name, env_name):
     return azure_provider
 
 
-def get_provider(provider_name, profile_name=None, env_name=None):
+def get_provider(provider_name, profile_name=None, env_name=None, named_profile=False):
     if not profile_name:
         if os.environ.has_key('CUCLOUD_PROFILE'):
             profile_name = os.environ.get('CUCLOUD_PROFILE')
@@ -34,9 +34,9 @@ def get_provider(provider_name, profile_name=None, env_name=None):
             raise Exception('Environment name must be specified when using get_provider() or set Env var CUCLOUD_ENV')
 
     if provider_name == 'aws':
-        return aws(profile_name, env_name)
+        return aws(profile_name, env_name, named_profile)
     elif provider_name == 'azure':
-        return azure(profile_name, env_name)
+        return azure(profile_name, env_name, named_profile)
     else:
         raise Exception('Unsupported provider "' + provider_name + '"')
 
