@@ -4,18 +4,18 @@ import os
 __author__ = 'emg33'
 
 
-def aws(profile_name, env_name):
+def aws(profile_name, env_name, named_profile):
     from cucloud.aws import provider
 
-    aws_provider = provider.AwsProvider(profile_name, env_name)
+    aws_provider = provider.AwsProvider(profile_name, env_name, named_profile)
 
     return aws_provider
 
 
-def azure(profile_name, env_name):
+def azure(profile_name, env_name, named_profile):
     from cucloud.azure import provider
 
-    azure_provider = provider.AzureProvider(profile_name, env_name)
+    azure_provider = provider.AzureProvider(profile_name, env_name, named_profile)
 
     return azure_provider
 
