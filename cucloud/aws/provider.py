@@ -32,6 +32,7 @@ class AwsProvider(ProviderBase):
             # select our connection profile, https://github.com/boto/boto3/pull/69
             # which AWS account are we going to use
             boto3.setup_default_session(profile_name=profile_name)
+            print "Using AWS named profile '" + profile_name + "'"
 
         # Get the service resource.
         # http://boto3.readthedocs.org/en/latest/guide/dynamodb.html

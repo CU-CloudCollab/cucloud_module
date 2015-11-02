@@ -71,6 +71,9 @@ class Storage(object):
         #   VolumeIds=[volume.id]
         #)
 
+        print "Snapshot initiated " + Snapshot.id + " from " + Volume.id
+        print "  set description '" + descr + "'"
+
         # set tags on the new snapshot
         if Volume.tags:
             self.ec2client.create_tags(
