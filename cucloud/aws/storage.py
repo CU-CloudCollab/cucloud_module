@@ -1,7 +1,9 @@
 import boto3
 import boto3.utils
 import abc
+import pytz
 from datetime import datetime
+from datetime import timedelta
 
 __author__ = 'emg33'
 
@@ -126,7 +128,69 @@ class Storage(object):
         # FIXME: what do we want to return here?
         return True
 
-    #def purge_old_instance_snapshots(self, instance_ids):
-        # TODO: get snapshot_max_days from config?
-        #raise NotImplementedError('Purge old instances not yet implemented')
-        #return None
+    def delete_snapshot(self, SnapshotId):
+        """
+        :param SnapshotId: string
+        :return: response
+        """
+        print "Deleting snapshot: " + SnapshotId
+        try:
+            response = self.ec2client.delete_snapshot(
+                SnapshotId=SnapshotId,
+                DryRun=False
+            )
+            return response
+        except Exception:
+            pass
+
+        # no concept of waiter on snapshot delete
+
+        return False
+
+    def find_old_snapshots(self, VolumeIds=None, snapshot_max_days=21):
+        oldsnapshots = []
+
+        # set to UTC to avoid any issues
+        d = timedelta(days=snapshot_max_days)
+        now_dttm = datetime.now(pytz.UTC)
+        consider_old_dttm = now_dttm - d
+
+        # print sanity
+        print "Current dttm: " + now_dttm.isoformat()
+        print "Def old dttm: " + consider_old_dttm.isoformat()
+
+        # find all snapshots for each of the VolumeIds
+        # http://boto3.readthedocs.org/en/latest/reference/services/ec2.html#EC2.Client.describe_snapshots
+        for VolumeId in VolumeIds:
+            response = self.ec2client.describe_snapshots(
+                Filters=[
+                    {'Name': 'volume-id',
+                     'Values': [VolumeId]
+                     },
+                    {'Name': 'status',
+                     'Values': ['completed']}
+
+                ]
+            )
+
+            snapshots = response['Snapshots']
+            for snapshot in snapshots:
+                # are we older than ...
+                snapshot_dttm = snapshot['StartTime']
+                if snapshot_dttm <= consider_old_dttm:
+                    oldsnapshots.append(snapshot)
+
+        return oldsnapshots
+
+    def delete_old_snapshots(self, VolumeIds=None, snapshot_max_days=None):
+        # safety check to prevent deleting anything < 24hrs
+        if not snapshot_max_days:
+          raise Exception('Must set snapshot_max_days > 0')
+
+        oldsnapshots = self.find_old_snapshots(VolumeIds, snapshot_max_days)
+
+        for snapshot in oldsnapshots:
+            print "    match: " + snapshot['SnapshotId'] + ", from: " + snapshot['StartTime'].isoformat() + ", descr: " + snapshot['Description']
+            self.delete_snapshot(snapshot['SnapshotId'])
+
+        return oldsnapshots
