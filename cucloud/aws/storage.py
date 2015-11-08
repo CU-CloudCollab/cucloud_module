@@ -1,9 +1,9 @@
 import boto3
 import boto3.utils
 import abc
-import pytz
-from datetime import datetime
+import datetime
 from datetime import timedelta
+from dateutil.tz import *
 
 __author__ = 'emg33'
 
@@ -152,7 +152,7 @@ class Storage(object):
 
         # set to UTC to avoid any issues
         d = timedelta(days=snapshot_max_days)
-        now_dttm = datetime.now(pytz.UTC)
+        now_dttm = datetime.datetime.now(tzlocal())
         consider_old_dttm = now_dttm - d
 
         # print sanity

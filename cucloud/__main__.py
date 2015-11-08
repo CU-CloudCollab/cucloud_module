@@ -76,7 +76,7 @@ def main(args=None):
         logging.info('Using profile environment "%s" set via arguments', env_name)
     else:
         logging.fatal('No profile environment selected')
-        raise Exception('Cloud profile enviornment must be configured or set via command line')
+        raise Exception('Cloud profile environment must be configured or set via command line')
 
     provider = providers.get_provider(provider_name, profile_name, env_name)
 

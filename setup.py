@@ -1,8 +1,8 @@
 from setuptools import setup
 from cucloud import __version__
 
-requires = ['boto3',
-            'botocore']
+requires = ['boto3>=1.2.0',
+            'python-dateutil>=2.1,<3.0.0']
 
 setup_options = dict(
     name='cucloud',

@@ -15,4 +15,4 @@ Attempts to follow: Python PEP0008 style guide - https://www.python.org/dev/peps
 """
 __author__ = 'emg33'
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
