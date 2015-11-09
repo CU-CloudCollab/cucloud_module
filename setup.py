@@ -29,7 +29,7 @@ setup_options = dict(
     maintainer='Eric Grysko',
     maintainer_email='emg33@cornell.edu',
     url='https://github.com/CU-CloudCollab/cucloud_module',
-    packages=['cucloud','cucloud.aws'],
+    packages=['cucloud','cucloud.aws', 'cucloud.azure'],
     entry_points = {
         'console_scripts': ['cucloud = cucloud.__main__:main'],
     },

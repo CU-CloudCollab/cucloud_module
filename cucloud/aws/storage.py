@@ -2,16 +2,17 @@ import boto3
 import boto3.utils
 import abc
 import datetime
-from datetime import timedelta
-from dateutil.tz import *
+from cucloud.storage import StorageBase
 
 __author__ = 'emg33'
 
 
-class Storage(object):
+class Storage(StorageBase):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self):
+        super(Storage, self).__init__()
+
         # http://boto3.readthedocs.org/en/latest/reference/services/ec2.html#client
         self.ec2client = boto3.client('ec2')
         # http://boto3.readthedocs.org/en/latest/reference/services/ec2.html#service-resource
@@ -40,7 +41,7 @@ class Storage(object):
 
         return Instance.volumes.all()
 
-    def create_snapshot_volume(self, Volume=None, VolumeId=None):
+    def create_snapshot_volume(self, Volume=None, VolumeId=None, snapshot_tag=None):
         """
         :param volume: EC2.volume
         :return: EC2.Snapshot
@@ -53,7 +54,7 @@ class Storage(object):
         # TODO: is this a root device? if, really should handle differently or at least warn
 
         # create the description, using today's date
-        now = datetime.today()
+        now = datetime.datetime.today()
 
         descr = self.get_name_given_tags(Volume.tags)
         if len(descr):
@@ -61,31 +62,42 @@ class Storage(object):
         descr += now.strftime('%Y-%m-%d')
 
         # http://boto3.readthedocs.org/en/latest/reference/services/ec2.html#snapshot
-        Snapshot = self.ec2resource.create_snapshot(
-            VolumeId=Volume.id,
-            Description=descr
-        )
-
-        # FIXME: waiter isnt responding correctly.
-        # create a waiter until this is complete
-        #waiter = self.ec2client.get_waiter('volume_available')
-        #waiter.wait(
-        #   VolumeIds=[volume.id]
-        #)
-
-        print "Snapshot initiated " + Snapshot.id + " from " + Volume.id
-        print "  set description '" + descr + "'"
-
-        # set tags on the new snapshot
-        if Volume.tags:
-            self.ec2client.create_tags(
-                Resources=[Snapshot.id],
-                Tags=Volume.tags
+        try:
+            Snapshot = self.ec2resource.create_snapshot(
+                VolumeId=Volume.id,
+                Description=descr,
+                DryRun=self.dry_run
             )
 
-        return Snapshot
+            # FIXME: waiter isnt responding correctly.
+            # create a waiter until this is complete
+            #waiter = self.ec2client.get_waiter('volume_available')
+            #waiter.wait(
+            #   VolumeIds=[volume.id]
+            #)
 
-    def create_snapshot_volumes(self, Volumes=None, VolumeIds=None):
+            print "Snapshot initiated " + Snapshot.id + " from " + Volume.id
+            print "  set description '" + descr + "'"
+
+            if snapshot_tag:
+                Volume.tags.append({'Key': 'cucloud-snapshot', 'Value': snapshot_tag.lower()})
+
+            # set tags on the new snapshot
+            if Volume.tags:
+                self.ec2client.create_tags(
+                    Resources=[Snapshot.id],
+                    Tags=Volume.tags
+                )
+
+            return Snapshot
+
+        except Exception:
+            print "DRY-RUN Creating snapshot"
+            pass
+
+        return False
+
+    def create_snapshot_volumes(self, Volumes=None, VolumeIds=None, snapshot_tag=None):
         """
         :param volumes: list[EC2.Volume]
         :return: list[EC2.Snapshot]
@@ -100,12 +112,12 @@ class Storage(object):
 
         Snapshots = []
         for Volume in Volumes:
-            Snapshot = self.create_snapshot_volume(Volume)
+            Snapshot = self.create_snapshot_volume(Volume, snapshot_tag=snapshot_tag)
             Snapshots.append(Snapshot)
 
         return Snapshots
 
-    def create_snapshot_all_instance_volumes(self, Instance=None, InstanceId=None):
+    def create_snapshot_all_instance_volumes(self, snapshot_tag=None, Instance=None, InstanceId=None):
         if not Instance and not InstanceId:
             raise Exception('Instance or InstanceId must be set')
 
@@ -114,83 +126,100 @@ class Storage(object):
 
         volumes = self.get_instance_volumes(Instance=Instance)
 
-        snapshots = self.create_snapshot_for_volumes(volumes)
+        snapshots = self.create_snapshot_volumes(Volumes=volumes, snapshot_tag=snapshot_tag)
 
         return snapshots
 
-    def create_snapshot_all_instances_volumes(self, InstanceIds=None):
+    def create_snapshot_all_instances_volumes(self, snapshot_tag=None, InstanceIds=None):
         if not InstanceIds:
             raise Exception('InstanceIds required')
 
-        for InstanceId in InstanceIds:
-            self.create_snapshot_all_instance_volumes(InstanceId=InstanceId)
+        snapshots = []
 
-        # FIXME: what do we want to return here?
-        return True
+        for InstanceId in InstanceIds:
+            instance_snapshots = self.create_snapshot_all_instance_volumes(snapshot_tag=snapshot_tag, InstanceId=InstanceId)
+            snapshots = snapshots + instance_snapshots
+
+        return snapshots
 
     def delete_snapshot(self, SnapshotId):
         """
         :param SnapshotId: string
         :return: response
         """
-        print "Deleting snapshot: " + SnapshotId
         try:
             response = self.ec2client.delete_snapshot(
                 SnapshotId=SnapshotId,
-                DryRun=False
+                DryRun=self.dry_run
             )
+            print "Deleting: " + SnapshotId
             return response
         except Exception:
-            pass
+            print "DRY-RUN Deleting: " + SnapshotId
+
+        print ""
 
         # no concept of waiter on snapshot delete
 
-        return False
+        return True
 
-    def find_old_snapshots(self, VolumeIds=None, snapshot_max_days=21):
+    def delete_snapshots(self, SnapshotIds):
+        """Calls delete_snapshot on all passed SnapshotIds
+
+        :param SnapshotIds: list
+        :return:
+        """
+        for SnapshotId in SnapshotIds:
+            self.delete_snapshot(SnapshotId)
+
+        return True
+
+    def find_old_snapshots(self, snapshot_policy=None, VolumeIds=None):
+        self.verify_snapshot_policy(snapshot_policy)
+
         oldsnapshots = []
 
-        # set to UTC to avoid any issues
-        d = timedelta(days=snapshot_max_days)
-        now_dttm = datetime.datetime.now(tzlocal())
-        consider_old_dttm = now_dttm - d
+        # using keys
+        for snapshot_tag in ['daily', 'weekly', 'monthly', 'yearly']:
 
-        # print sanity
-        print "Current dttm: " + now_dttm.isoformat()
-        print "Def old dttm: " + consider_old_dttm.isoformat()
+            policy_value = snapshot_policy[snapshot_tag]
+            if policy_value == 0:
+                print "Keep all snapshots for " + snapshot_tag
+                continue
 
-        # find all snapshots for each of the VolumeIds
-        # http://boto3.readthedocs.org/en/latest/reference/services/ec2.html#EC2.Client.describe_snapshots
-        for VolumeId in VolumeIds:
-            response = self.ec2client.describe_snapshots(
-                Filters=[
-                    {'Name': 'volume-id',
-                     'Values': [VolumeId]
-                     },
-                    {'Name': 'status',
-                     'Values': ['completed']}
+            # calculate old_dttm based on snapshot_tag and snapshot_policy[snapshot_tag]
+            consider_old_dttm = self.get_old_dttm(snapshot_tag, snapshot_policy[snapshot_tag])
 
-                ]
-            )
+            # find all snapshots for each of the VolumeIds
+            # http://boto3.readthedocs.org/en/latest/reference/services/ec2.html#EC2.Client.describe_snapshots
+            for VolumeId in VolumeIds:
+                response = self.ec2client.describe_snapshots(
+                    Filters=[
+                        {'Name': 'volume-id',
+                         'Values': [VolumeId]
+                         },
+                        {'Name': 'status',
+                         'Values': ['completed']
+                         },
+                        {'Name': 'tag:cucloud-snapshot',
+                         'Values': [snapshot_tag]}
+                    ]
+                )
 
-            snapshots = response['Snapshots']
-            for snapshot in snapshots:
-                # are we older than ...
-                snapshot_dttm = snapshot['StartTime']
-                if snapshot_dttm <= consider_old_dttm:
-                    oldsnapshots.append(snapshot)
+                snapshots = response['Snapshots']
+                for snapshot in snapshots:
+                    snapshot_dttm = snapshot['StartTime']
+                    # are we older than ... OR keep none
+                    if snapshot_dttm <= consider_old_dttm or policy_value == -1:
+                        oldsnapshots.append(snapshot)
 
         return oldsnapshots
 
-    def delete_old_snapshots(self, VolumeIds=None, snapshot_max_days=None):
-        # safety check to prevent deleting anything < 24hrs
-        if not snapshot_max_days:
-          raise Exception('Must set snapshot_max_days > 0')
-
-        oldsnapshots = self.find_old_snapshots(VolumeIds, snapshot_max_days)
+    def delete_old_snapshots(self, snapshot_policy=None, VolumeIds=None):
+        oldsnapshots = self.find_old_snapshots(snapshot_policy=snapshot_policy, VolumeIds=VolumeIds)
 
         for snapshot in oldsnapshots:
-            print "    match: " + snapshot['SnapshotId'] + ", from: " + snapshot['StartTime'].isoformat() + ", descr: " + snapshot['Description']
+            print "Snapshot: " + snapshot['SnapshotId'] + ", from: " + snapshot['StartTime'].isoformat() + ", descr: " + snapshot['Description']
             self.delete_snapshot(snapshot['SnapshotId'])
 
         return oldsnapshots

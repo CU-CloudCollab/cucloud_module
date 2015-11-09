@@ -6,22 +6,17 @@ from cucloud.aws import compute
 from cucloud.aws import dns
 from cucloud.aws import dynamodb
 from cucloud.aws import storage
-from cucloud.providers import ProviderBase
+from cucloud.provider import ProviderBase
 
 __author__ = 'emg33'
 
 
 class AwsProvider(ProviderBase):
 
-    def __init__(self, profile_name, env_name, named_profile=False):
-        self._profile_name = None
-        self._env_name = None
+    def __init__(self, profile_name, env_name, dry_run=False, named_profile=False):
+        super(AwsProvider, self).__init__(profile_name, env_name, dry_run=dry_run)
+
         self._config = None
-
-        # construct
-        self.profile_name = profile_name
-        self.env_name = env_name
-
         self.use_named_profiles = str(named_profile)
 
         if os.environ.has_key('CUCLOUD_AWS_USE_NAMED_PROFILE'):
@@ -40,32 +35,6 @@ class AwsProvider(ProviderBase):
 
         # our config dict, created on demand with defaults in does not exist in the account
         self.config = self._get_config(self.profile_name, self.env_name)
-
-    @property
-    def profile_name(self):
-        """currently active profile"""
-        return self._profile_name
-
-    @profile_name.setter
-    def profile_name(self, value):
-        self._profile_name = value
-
-    @profile_name.deleter
-    def profile_name(self):
-        del self._profile_name
-
-    @property
-    def env_name(self):
-        """default selected name of env"""
-        return self._env_name
-
-    @env_name.setter
-    def env_name(self, value):
-        self._env_name = value
-
-    @env_name.deleter
-    def env_name(self):
-        del self._env_name
 
     @property
     def config(self):
@@ -267,16 +236,21 @@ class AwsProvider(ProviderBase):
         """
         :return: cucloud.aws.compute.Compute
         """
-        return compute.Compute()
+        c = compute.Compute()
+        c.dry_run = self.dry_run
+        return c
 
     def storage(self):
         """
         :return: cucloud.aws.storage.Storage
         """
-        return storage.Storage()
+        s = storage.Storage()
+        s.dry_run = self.dry_run
+        return s
 
     def dns(self):
         """
         :return: cucloud.aws.dns.Dns
         """
-        return dns.Dns()
+        d = dns.Dns()
+        return d

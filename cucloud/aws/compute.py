@@ -2,14 +2,17 @@ import boto3
 import boto3.utils
 import abc
 import time
+from cucloud.compute import ComputeBase
 
 __author__ = 'emg33'
 
 
-class Compute(object):
+class Compute(ComputeBase):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self):
+        super(Compute, self).__init__()
+
         # http://boto3.readthedocs.org/en/latest/reference/services/ec2.html#client
         self.ec2client = boto3.client('ec2')
         # http://boto3.readthedocs.org/en/latest/reference/services/ec2.html#service-resource
@@ -95,27 +98,35 @@ class Compute(object):
         :param list instance id
         :return:
         """
-        print "Issuing start instances for "
+        print "Issuing start instance(s) for "
         print InstanceIds
+        try:
 
-        response = self.ec2client.start_instances(
-            InstanceIds=InstanceIds
-        )
+            response = self.ec2client.start_instances(
+                InstanceIds=InstanceIds,
+                DryRun=self.dry_run
+            )
 
-        print "waiting until running"
-        waiter = self.ec2client.get_waiter('instance_running')
-        waiter.wait(InstanceIds=InstanceIds)
-        print "Wait complete. Instances started."
+            print "Waiting until instance(s) are running."
+            waiter = self.ec2client.get_waiter('instance_running')
+            waiter.wait(InstanceIds=InstanceIds)
+            print "Wait complete. Instance(s) started."
 
-        return response
+            return response
+        except Exception:
+            print "DRY-RUN started instance(s)."
+
+        return False
 
     def attach_instance_to_balancer(self, InstanceId, LoadBalancerName):
         print "Registering " + InstanceId + " with elb: " + LoadBalancerName
-        response = self.elbclient.register_instances_with_load_balancer(
-            LoadBalancerName=LoadBalancerName,
-            Instances=[{'InstanceId': InstanceId}]
-        )
-        return response
+        if not self.dry_run:
+            response = self.elbclient.register_instances_with_load_balancer(
+                LoadBalancerName=LoadBalancerName,
+                Instances=[{'InstanceId': InstanceId}]
+            )
+            return response
+        return False
 
     def start_instance_and_attach_to_balancers(self, InstanceId, LoadBalancerNames):
         # start instances
@@ -146,15 +157,18 @@ class Compute(object):
                 for i in instance_ids_attached_to_balancer:
                     elb_instance_id_dict.append({'InstanceId': i})
 
-                self.elbclient.deregister_instances_from_load_balancer(
-                    LoadBalancerName=elb['LoadBalancerName'],
-                    Instances=elb_instance_id_dict
-                )
+                # dry-run is not supported by ELB client!
+                if not self.dry_run:
+                    self.elbclient.deregister_instances_from_load_balancer(
+                        LoadBalancerName=elb['LoadBalancerName'],
+                        Instances=elb_instance_id_dict,
+                        DryRun=self.dry_run
+                    )
 
-                # FIXME: no waiters available, but we could verify manually using describe_load_balancers again?
-                time.sleep(10)
+                    # FIXME: no waiters available, but we could verify manually using describe_load_balancers again?
+                    time.sleep(10)
 
-        return
+        return True
 
     def stop_instances(self, InstanceIds):
         """
@@ -164,28 +178,40 @@ class Compute(object):
         :param list instance id
         :return:
         """
-        self.deregister_instances_from_all_balancers(InstanceIds)
-
-        print "Issuing stop instances for "
+        print "Issuing stop instance(s) for "
         print InstanceIds
+        try:
+            self.deregister_instances_from_all_balancers(InstanceIds)
 
-        response = self.ec2client.stop_instances(
-            InstanceIds=InstanceIds
-        )
+            response = self.ec2client.stop_instances(
+                InstanceIds=InstanceIds,
+                DryRun=self.dry_run
+            )
 
-        print "Waiting until stopped"
-        waiter = self.ec2client.get_waiter('instance_stopped')
-        waiter.wait(InstanceIds=InstanceIds)
-        print "Waiter complete. Instances have been stopped."
+            print "Waiting until stopped"
+            waiter = self.ec2client.get_waiter('instance_stopped')
+            waiter.wait(InstanceIds=InstanceIds)
+            print "Waiter complete. Instances have been stopped."
 
-        return len(InstanceIds)
+            return len(InstanceIds)
+        except Exception:
+            print "DRY-RUN stopped instance(s)."
 
-    def reboot_instances(self, instance_ids):
-        response = self.ec2client.reboot_instances(
-            InstanceIds=instance_ids
-        )
+        return False
 
-        return response
+    def reboot_instances(self, InstanceIds):
+        try:
+            response = self.ec2client.reboot_instances(
+                InstanceIds=InstanceIds,
+                DryRun=self.dry_run
+            )
+
+            return response
+        except Exception:
+            print "DRY-RUN reboot instances for "
+            print InstanceIds
+
+        return False
 
     def region_list(self):
         """

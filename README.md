@@ -21,12 +21,14 @@ First step in independent development of the [Cloud-Library-Spec](https://github
 * Configuration management for multiple profiles and environments within each profile.
 	* For the AWS provider, configuration is stored in DynamoDB and can be imported/exported as JSON.
 * Compute:
-	* Start, stop, reboot instances via instance id(s) or tag(s)
+	* Start, stop, reboot instances via instance id(s) or tag(s), including automatic de-registering on load balancers
+	* Associate instances w/load balancer
 * Storage:
 	* Create storage snapshots - by volume_id(s) or all volumes attached to 1 or more instances.
 		* Name - keeps same as source volume
 		* Description - concat(name,-,MM-DD-YYYY)
 		* snapshot.start_time should be used to determine future purging
+    * Delete snapshots - by specified policy, ex. ``{'daily': 4, 'weekly': 3, 'monthly': 6, 'yearly': -1}``
 
 #### Planned
 
@@ -34,7 +36,6 @@ Implemented features should add value -- leverage integrated configuration and/o
 
 * Storage:
 	* Find volume snapshots - param based - like create volume - not a single purge
-	* Delete volume snapshot
 	* Restore volume snapshot
 * Compute: 
 	* Create Instance
@@ -48,7 +49,7 @@ Implemented features should add value -- leverage integrated configuration and/o
 
 ## Installation
 
-Requires ``boto3``. ``cucloud`` is not currently available via PyPI.
+Requires ``boto3`` and ``python-dateutil``. ``cucloud`` is not currently available via PyPI.
 
 0. Download the package
 	```
@@ -86,25 +87,33 @@ Requires ``boto3``. ``cucloud`` is not currently available via PyPI.
 
 ### Environmental Variables
 
+There are 5 CUCLOUD_ available environmental variables.
+
 ```
-# providers must be chosen from supported cucloud module, currently only aws
-# is supported
+# (OPTIONAL, DEFAULT=aws)
+# providers must be chosen from supported cucloud modules, currently only aws is supported
 CUCLOUD_PROVIDER=aws
 
+# (OPTIONAL, DEFAULT=False) 
+# when using AWS, if you are using named connection profiles, set this to true
+# your CUCLOUD_PROFILE value should then match your named profile name
+# unset or set to false if you are using IAM role or AWS_ACCESS_KEY_ID=
+CUCLOUD_AWS_USE_NAMED_PROFILE=true
+
+# (OPTIONAL, DEFAULT=False)
+# Enforces dryrun mode and makes no changes to your resources
+CUCLOUD_DRYRUN=true
+
+# (REQUIRED)
 # profiles are user created, if you are using multiple profiles with 
 # ~/.aws/credentials, your profile name must match
 # If you use IAM role or AWS_ACCESS_KEY_ID= you still need to set a value
-# but it will not effect your connection
+# but it will not effect your connection, suggested to match your account name
 CUCLOUD_PROFILE=sandbox
 
+# (REQUIRED)
 # to allow different configuration values within a profile
 CUCLOUD_ENV=dev
-
-# (OPTIONAL) when using AWS, if you are using named connectino profiles, 
-# set this to true
-# your CUCLOUD_PROFILE value should then match your named profile name
-# keep this to false or not set if you are using IAM role or AWS_ACCESS_KEY_ID=
-CUCLOUD_AWS_USE_NAMED_PROFILE=true
 ```
 
 In addition to CUCLOUD_* specific vars, use of AWS named profiles is supported with ``~/.aws/config`` and ``~/.aws/credentials``.  For more information, see the [Configuring the AWS Command Line Interface](http://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html).
@@ -145,7 +154,8 @@ aws_secret_access_key = secretkey2
 
 ### Managing Profiles and Environments
 
-You are recommend to set ``CUCLOUD_PROVIDER``, ``CUCLOUD_PROFILE``, ``CUCLOUD_ENV`` env vars, but you can override via command line.
+When using cucloud from command line, you are recommend to set ``CUCLOUD_PROVIDER``, ``CUCLOUD_PROFILE``, ``CUCLOUD_ENV`` env vars, but you can override via command line.
+If you are using named profiles with AWS and want to switch which account ``cucloud`` connects to, be sure to use ``CUCLOUD_AWS_USE_NAMED_PROFILE=True``
 
 ```
 $ export CUCLOUD_PROVIDER=aws
@@ -155,7 +165,7 @@ $ export CUCLOUD_ENV=sandbox
 $ cucloud --provider aws --profile=prod --env=stage --config-list
 ```
 
-For each ``CUCLOUD_PROFILE`` (which likely maps to an AWS named profile), you can managing configuration values for multiple environments. For example, if you have a sandbox account mapped to a "sandbox" profile, you may have a dev and a test environment within the same account/profile.
+For each ``CUCLOUD_PROFILE`` (which likely maps to an AWS account), you can managing configuration values for multiple environments. For example, if you have a sandbox account mapped to a "sandbox" profile, you may have a dev and a test environment within the same account/profile.
 
 ```
 # display list of existing values.
@@ -171,7 +181,7 @@ $ cucloud --profile sandbox --env dev --config-import < config.json
 
 #### Command Line
 
-The package ``cu_cloudcollab_util`` provides a single CLI entry point: `` cucloud`` for managing configuration.
+The ``cucloud_module`` package provides a single CLI entry point: ``cucloud`` for managing configuration.
 
 ```
 usage: cucloud [-h] [--provider {aws,azure}] [--profile PROFILE] [--env ENV]
@@ -258,8 +268,9 @@ Creating your own scripts leveraging the ``cucloud`` module.
 
 ```
 #!/usr/bin/env python
-import cucloud.providers
+from cucloud import providers
 
+# initialize our AWS provider, relying on env vars: CUCLOUD_PROFILE and CUCLOUD_ENV
 provider = providers.get_provider('aws')
 
 # get our Compute class which will provide methods we want to use
@@ -277,6 +288,5 @@ tag_values = ['web-001', 'web-002']
 compute.start_instances_tagged('Name', tag_values)
 compute.stop_instances_tagged('Name', tag_values)
 compute.reboot_instances_tagged('Name', tag_values)
-
 ```
 

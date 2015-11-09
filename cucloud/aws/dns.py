@@ -1,14 +1,16 @@
 import boto3
 import boto3.utils
 import abc
+from cucloud.dns import DnsBase
 
 __author__ = 'emg33'
 
 
-class Dns(object):
+class Dns(DnsBase):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self):
+        super(Dns, self).__init__()
         self.r53client = boto3.client('route53')
 
     def hosted_domains(self):
