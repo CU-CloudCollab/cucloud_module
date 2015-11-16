@@ -1,7 +1,9 @@
 import boto3
-import json
 import logging
 import os
+import decimal
+import json
+import ast
 from cucloud.aws import compute
 from cucloud.aws import dns
 from cucloud.aws import dynamodb
@@ -27,7 +29,7 @@ class AwsProvider(ProviderBase):
             # select our connection profile, https://github.com/boto/boto3/pull/69
             # which AWS account are we going to use
             boto3.setup_default_session(profile_name=profile_name)
-            print "Using AWS named profile '" + profile_name + "'"
+            print "Using AWS named profile '" + profile_name + "' with env '" + env_name + "'"
 
         # Get the service resource.
         # http://boto3.readthedocs.org/en/latest/guide/dynamodb.html
@@ -141,11 +143,13 @@ class AwsProvider(ProviderBase):
         if not config:
 
             # config_version in event we want to change structure stored
+            policies = {'default': {'daily': 0, 'weekly': 0, 'monthly': 0, 'yearly': 0}}
             json_obj = {
                 "instance_type": "t2.micro",
                 "min_count": '1',
                 "max_count": '1',
-                "config_version": '1'
+                "config_version": '1',
+                "snapshot_policies": policies
             }
 
             self.add_profile(profile_name, env_name, json_obj)
@@ -185,6 +189,29 @@ class AwsProvider(ProviderBase):
         else:
             return input
 
+    def dotn_put(self, d, keys, item):
+        if "." in keys:
+            key, rest = keys.split(".", 1)
+            if key not in d:
+                d[key] = {}
+            self.dotn_put(d[key], rest, item)
+        else:
+            d[keys] = item
+
+    def dotn_get(self, d, keys):
+        if "." in keys:
+            key, rest = keys.split(".", 1)
+            return self.dotn_get(d[key], rest)
+        else:
+            return d[keys]
+
+    def dotn_unset(self, d, keys):
+        if "." in keys:
+            key, rest = keys.split(".", 1)
+            self.dotn_unset(d[key], rest)
+        else:
+            d.pop(keys, None)
+
     def handle_args(self, args):
         if args.config_list:
             print 'Configuration for AWS profile: "' + self.profile_name + '", environment: "' + self.env_name + '"'
@@ -197,20 +224,19 @@ class AwsProvider(ProviderBase):
             return True
 
         elif args.config_set:
-            # TODO: check for known keys?
             config_key = args.config_set[0]
             config_value = args.config_set[1]
 
-            self.config[config_key] = config_value
+            eval_config_value = ast.literal_eval(config_value)
+            self.dotn_put(self.config, config_key, eval_config_value)
 
             return self.save_profile()
 
         elif args.config_unset:
-            # TODO: check for known keys?
             config_key = args.config_unset[0]
 
-            # TODO: some keys should always reset to DEFAULT!
-            self.config.pop(config_key, None)
+            self.dotn_unset(self.config, config_key)
+
             return self.save_profile()
 
         elif args.config_import:
@@ -254,3 +280,24 @@ class AwsProvider(ProviderBase):
         """
         d = dns.Dns()
         return d
+
+    def decimal_default(self, obj):
+        if isinstance(obj, decimal.Decimal):
+            return int(obj)
+        raise TypeError
+
+    def get_snapshot_policy(self, policy_name):
+        if not policy_name in self.config['snapshot_policies']:
+            raise Exception('Snapshot policy "' + policy_name + '" not found')
+
+        snapshot_policy_enc = self.config['snapshot_policies'][policy_name]
+        snapshot_policy = json.loads(json.dumps(snapshot_policy_enc, default=self.decimal_default))
+        return snapshot_policy
+
+    def set_snapshot_policy(self, policy_name, snapshot_policy):
+        # set on config and save
+        if 'snapshot_policies' in self.config:
+            self.config['snapshot_policies'][policy_name] = snapshot_policy
+        else:
+            self.config['snapshot_policies'] = {policy_name: snapshot_policy}
+        self.save_profile()

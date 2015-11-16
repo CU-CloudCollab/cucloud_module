@@ -184,7 +184,6 @@ class Storage(StorageBase):
 
             policy_value = snapshot_policy[snapshot_tag]
             if policy_value == 0:
-                print "Keep all snapshots for " + snapshot_tag
                 continue
 
             # calculate old_dttm based on snapshot_tag and snapshot_policy[snapshot_tag]

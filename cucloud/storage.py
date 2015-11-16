@@ -69,7 +69,7 @@ class StorageBase(object):
         self.verify_snapshot_policy(snapshot_policy)
 
         print "Using snapshot policy:"
-        print snapshot_policy
+        # print snapshot_policy
         for snapshot_tag in ['daily', 'weekly', 'monthly', 'yearly']:
             policy_value = snapshot_policy[snapshot_tag]
             if policy_value == 0:
@@ -78,4 +78,12 @@ class StorageBase(object):
                 print "Keep no '" + snapshot_tag + "' snapshots"
             else:
                 old_dttm = self.get_old_dttm(snapshot_tag, policy_value)
-                print "Delete any '" + snapshot_tag + "' snapshots older than " + old_dttm.isoformat()
+                print "Delete '" + snapshot_tag + "' snapshots older than " + str(policy_value) + " (" + old_dttm.isoformat() + ")"
+
+    def create_snapshot_policy(self, daily=0, weekly=0, monthly=0, yearly=0):
+        snapshot_policy = {'daily': daily,
+                           'weekly': weekly,
+                           'monthly': monthly,
+                           'yearly': yearly}
+
+        return snapshot_policy

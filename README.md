@@ -223,17 +223,22 @@ min_count			1
 max_count			1
 ```
 
-Set a specific configuration value
+Set a specific configuration value. Strings must be escaped as shown. Dot notation is supported for dictionaries.
 ```
-$ cucloud --config-set snapshot_max_days 21
+$ cucloud --config-set instance_type '"t2.small"'
+$ cucloud --config-set min_count 4
+$ cucloud --config-set snapshot_policies.longterm '{"daily": 7, "weekly": 4, "monthly": 6, "yearly": 3}'
+
 $ cucloud --config-list
 Configuration for AWS profile: "ssit-sb", environment: "dev"
 
 Key					Value
-instance_type		t2.micro
-min_count			1
-snapshot_max_days	21
+instance_type		t2.small
+min_count			4
 max_count			1
+snapshot_policies	{u'default': {u'yearly': Decimal('4'), u'monthly': Decimal('3'), u'daily': Decimal('1'), u'weekly': Decimal('2')},
+                     u'longterm': {u'yearly': Decimal('3'), u'monthly': Decimal('6'), u'daily': Decimal('7'), u'weekly': Decimal('4')}}
+
 ```
 
 
@@ -251,16 +256,25 @@ max_count			1
 
 Unset a value
 ```
-$ cucloud --config-unset snapshot_max_days
-$ cucloud --config-list
-Configuration for AWS profile: "ssit", environment: "dev"
-
-Key					Value
-instance_type		t2.micro
-min_count			1
-max_count			1
+$ cucloud --config-set ami_id '"ami-12345"'
+$ cucloud --config-list | grep ami
+ami_id		ami-12345
+$ cucloud --config-unset ami_id
+$ cucloud --config-list | grep ami | wc -l
+    0
 ```
 
+#### Snapshot Policies
+
+When setting a snapshot, via command line or code, you must set daily, weekly, monthly, and yearly values. 
+
+* 0: Keep all snapshots matching tag
+* -1: Keep NO snapshots matching tag.
+* 1+ : Delete snapshots older than # x the snapshot tag. So daily: 7 deletes any 'daily' snapshots older than 7 days. It does not mean keep only 7 daily snapshots.
+ 
+```
+$ cucloud --config-set snapshot_policies.longterm '{"daily": 7, "weekly": 4, "monthly": 6, "yearly": 3}'
+```
 
 ## Usage
 
@@ -289,4 +303,3 @@ compute.start_instances_tagged('Name', tag_values)
 compute.stop_instances_tagged('Name', tag_values)
 compute.reboot_instances_tagged('Name', tag_values)
 ```
-
