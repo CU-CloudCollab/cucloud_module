@@ -28,14 +28,14 @@ First step in independent development of the [Cloud-Library-Spec](https://github
 		* Name - keeps same as source volume
 		* Description - concat(name,-,MM-DD-YYYY)
 		* snapshot.start_time should be used to determine future purging
-    * Delete snapshots - by specified policy, ex. ``{'daily': 4, 'weekly': 3, 'monthly': 6, 'yearly': -1}``
+    * Find or Delete snapshots - by specified policy, ex. ``{'daily': 4, 'weekly': 3, 'monthly': 6, 'yearly': -1}``
+    * Manage snapshot policies via code or command line
 
 #### Planned
 
 Implemented features should add value -- leverage integrated configuration and/or be more advanced than straightforward SDK.
 
 * Storage:
-	* Find volume snapshots - param based - like create volume - not a single purge
 	* Restore volume snapshot
 * Compute: 
 	* Create Instance
@@ -76,7 +76,7 @@ Requires ``boto3`` and ``python-dateutil``. ``cucloud`` is not currently availab
 	```
 	# alternatively... if you simply need to use the CLI
 	python -m cucloud-<VERSION>/cucloud --provider aws --profile=sandbox \
-	       --env=dev --config-set snapshot_max_days 21
+	       --env=dev --config-set instance_type '"t2.micro"'
 	```
 
 
