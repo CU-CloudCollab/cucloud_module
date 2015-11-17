@@ -161,8 +161,7 @@ class Compute(ComputeBase):
                 if not self.dry_run:
                     self.elbclient.deregister_instances_from_load_balancer(
                         LoadBalancerName=elb['LoadBalancerName'],
-                        Instances=elb_instance_id_dict,
-                        DryRun=self.dry_run
+                        Instances=elb_instance_id_dict
                     )
 
                     # FIXME: no waiters available, but we could verify manually using describe_load_balancers again?
