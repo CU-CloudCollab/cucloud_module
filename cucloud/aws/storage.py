@@ -79,14 +79,17 @@ class Storage(StorageBase):
             print "Snapshot initiated " + Snapshot.id + " from " + Volume.id
             print "  set description '" + descr + "'"
 
+            voltags = Volume.tags
+            if not Volume.tags:
+                voltags = []
             if snapshot_tag:
-                Volume.tags.append({'Key': 'cucloud-snapshot', 'Value': snapshot_tag.lower()})
+                voltags.append({'Key': 'cucloud-snapshot', 'Value': snapshot_tag.lower()})
 
             # set tags on the new snapshot
-            if Volume.tags:
+            if voltags:
                 self.ec2client.create_tags(
                     Resources=[Snapshot.id],
-                    Tags=Volume.tags
+                    Tags=voltags
                 )
 
             return Snapshot
