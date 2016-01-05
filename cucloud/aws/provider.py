@@ -250,7 +250,7 @@ class AwsProvider(ProviderBase):
 
             # "pretty print"
             print json.dumps(json_str, sort_keys=True,
-                             indent=4, separators=(',', ': '))
+                             indent=4, separators=(',', ': '), default=self.decimal_default)
 
             return True
         else:
