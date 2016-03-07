@@ -23,6 +23,8 @@ def _create_parser():
     parser.add_argument('--config-import', help='Import JSON configuration', action='store_true')
     parser.add_argument('--config-export', help='Export JSON configuration', action='store_true')
 
+    parser.add_argument('--version', help='Display cucloud version number', action='store_true')
+
     parser.add_argument('infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin)
     parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'), default=sys.stdout)
 
@@ -47,6 +49,10 @@ def main(args=None):
 
     parser = _create_parser()
     args = parser.parse_args()
+
+    if args.version:
+        print __version__
+        sys.exit()
 
     # provider selection: prioritize args over over E=CUCLOUD_PROVIDER
     if args.provider:
